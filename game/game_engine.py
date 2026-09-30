@@ -18,6 +18,10 @@ HIT_WINDOW = 30
 BG = (15, 10, 25)
 LANE_W = WIDTH // LANES
 
+# Task 3: BPM settings
+BPM = 120
+BEAT_INTERVAL = 60.0 / BPM
+
 
 class GameEngine:
     def __init__(self):
@@ -76,8 +80,11 @@ class GameEngine:
         self.combo = 0
         self.max_combo = 0
         self.misses = 0
-        self.spawn_timer = 0
-        self.spawn_interval = 45
+
+        # Task 3: BPM-based timing
+        self.song_start_time = pygame.time.get_ticks()
+        self.last_beat = -1
+
         self.speed = 5
         self.frame = 0
         self.feedback = []
@@ -179,6 +186,7 @@ class GameEngine:
                     grade, pts = "OK", 100
                     col = (180, 180, 255)
 
+                # Task 1: sound effects
                 self.hit_sounds[grade].play()
 
                 self.combo += 1
@@ -223,24 +231,40 @@ class GameEngine:
             return
 
         self.frame += 1
-        self.spawn_timer += 1
 
-        if self.spawn_timer >= self.spawn_interval:
+        # ==========================================
+        # Task 3: BPM-synchronized note spawning
+        # ==========================================
 
-            self.spawn_note()
-            self.spawn_timer = 0
+        current_time = pygame.time.get_ticks()
 
-            if self.frame % 600 == 0:
+        elapsed = (
+            current_time - self.song_start_time
+        ) / 1000.0
 
-                self.speed = min(
-                    10,
-                    self.speed + 0.5
-                )
+        current_beat = int(
+            elapsed / BEAT_INTERVAL
+        )
 
-                self.spawn_interval = max(
-                    25,
-                    self.spawn_interval - 2
-                )
+        # Spawn exactly once for every new beat.
+        if current_beat > self.last_beat:
+
+            for beat in range(
+                self.last_beat + 1,
+                current_beat + 1
+            ):
+                self.spawn_note()
+
+            self.last_beat = current_beat
+
+        # Gradually increase note speed.
+        # This does NOT affect the BPM.
+        if self.frame % 600 == 0:
+
+            self.speed = min(
+                10,
+                self.speed + 0.5
+            )
 
         keys = pygame.key.get_pressed()
 
@@ -248,7 +272,10 @@ class GameEngine:
 
             note.update()
 
-            # Handle hold note
+            # ==========================================
+            # Task 2: Hold note handling
+            # ==========================================
+
             if note.is_hold and note.hold_started:
 
                 key = LANE_KEYS[note.lane]
@@ -263,19 +290,20 @@ class GameEngine:
                             "MISS",
                             (220, 60, 60),
                             40,
-                            note.lane * LANE_W + LANE_W // 2,
+                            note.lane * LANE_W
+                            + LANE_W // 2,
                             HIT_Y - 30
                         ]
                     )
 
                 else:
 
-                    elapsed = (
+                    elapsed_hold = (
                         pygame.time.get_ticks()
                         - note.hold_start_time
                     ) / 1000.0
 
-                    if elapsed >= note.hold_duration:
+                    if elapsed_hold >= note.hold_duration:
 
                         note.hit = True
 
@@ -309,7 +337,10 @@ class GameEngine:
                             ]
                         )
 
+            # ==========================================
             # Normal note missed
+            # ==========================================
+
             if (
                 not note.hit
                 and not note.missed
@@ -324,7 +355,10 @@ class GameEngine:
                 self.misses += 1
                 self.combo = 0
 
+            # ==========================================
             # Hold note missed before being started
+            # ==========================================
+
             if (
                 note.is_hold
                 and not note.hit

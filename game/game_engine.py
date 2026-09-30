@@ -28,6 +28,7 @@ class GameEngine:
         pygame.init()
         pygame.mixer.init()
 
+        # Task 1: Sound effects
         self.hit_sounds = {
             "PERFECT": self.create_tone(880, 0.08),
             "GREAT": self.create_tone(660, 0.08),
@@ -81,7 +82,13 @@ class GameEngine:
         self.max_combo = 0
         self.misses = 0
 
-        # Task 3: BPM-based timing
+        # Task 4: Grade counters
+        self.perfect_count = 0
+        self.great_count = 0
+        self.ok_count = 0
+        self.miss_count = 0
+
+        # Task 3: BPM timing
         self.song_start_time = pygame.time.get_ticks()
         self.last_beat = -1
 
@@ -93,7 +100,7 @@ class GameEngine:
     def spawn_note(self):
         lane = random.randint(0, LANES - 1)
 
-        # Occasionally create a hold note
+        # Task 2: Occasionally create a hold note
         is_hold = random.random() < 0.25
 
         self.notes.append(
@@ -155,6 +162,7 @@ class GameEngine:
 
         if best and best_dist <= HIT_WINDOW:
 
+            # Task 2: Start hold note
             if best.is_hold:
 
                 best.hold_started = True
@@ -174,6 +182,7 @@ class GameEngine:
 
                 best.hit = True
 
+                # Determine grade
                 if best_dist < 8:
                     grade, pts = "PERFECT", 300
                     col = (255, 220, 0)
@@ -186,7 +195,17 @@ class GameEngine:
                     grade, pts = "OK", 100
                     col = (180, 180, 255)
 
-                # Task 1: sound effects
+                # Task 4: Count grades
+                if grade == "PERFECT":
+                    self.perfect_count += 1
+
+                elif grade == "GREAT":
+                    self.great_count += 1
+
+                else:
+                    self.ok_count += 1
+
+                # Task 1: Play sound
                 self.hit_sounds[grade].play()
 
                 self.combo += 1
@@ -213,7 +232,10 @@ class GameEngine:
 
         else:
 
+            # Wrong key / missed tap
             self.combo = 0
+            self.misses += 1
+            self.miss_count += 1
 
             self.feedback.append(
                 [
@@ -233,7 +255,7 @@ class GameEngine:
         self.frame += 1
 
         # ==========================================
-        # Task 3: BPM-synchronized note spawning
+        # Task 3: BPM-synchronized spawning
         # ==========================================
 
         current_time = pygame.time.get_ticks()
@@ -246,7 +268,6 @@ class GameEngine:
             elapsed / BEAT_INTERVAL
         )
 
-        # Spawn exactly once for every new beat.
         if current_beat > self.last_beat:
 
             for beat in range(
@@ -257,8 +278,7 @@ class GameEngine:
 
             self.last_beat = current_beat
 
-        # Gradually increase note speed.
-        # This does NOT affect the BPM.
+        # Increase speed without changing BPM
         if self.frame % 600 == 0:
 
             self.speed = min(
@@ -284,6 +304,8 @@ class GameEngine:
 
                     note.missed = True
                     self.combo = 0
+                    self.misses += 1
+                    self.miss_count += 1
 
                     self.feedback.append(
                         [
@@ -310,6 +332,8 @@ class GameEngine:
                         self.hit_sounds[
                             "PERFECT"
                         ].play()
+
+                        self.perfect_count += 1
 
                         self.combo += 1
 
@@ -353,6 +377,7 @@ class GameEngine:
 
                 note.missed = True
                 self.misses += 1
+                self.miss_count += 1
                 self.combo = 0
 
             # ==========================================
@@ -372,6 +397,7 @@ class GameEngine:
 
                 note.missed = True
                 self.misses += 1
+                self.miss_count += 1
                 self.combo = 0
 
         self.notes = [
@@ -522,16 +548,39 @@ class GameEngine:
             (WIDTH - 170, 10)
         )
 
-        # Game over
+        # ==========================================
+        # Task 4: Grade Summary Screen
+        # ==========================================
+
         if self.game_over:
 
+            total_judged = (
+                self.perfect_count
+                + self.great_count
+                + self.ok_count
+                + self.miss_count
+            )
+
+            accuracy = (
+                (
+                    self.perfect_count * 1.0
+                    + self.great_count * 0.75
+                    + self.ok_count * 0.5
+                )
+                / total_judged
+                * 100
+                if total_judged > 0
+                else 0
+            )
+
+            # Dark overlay
             ov = pygame.Surface(
                 (WIDTH, HEIGHT),
                 pygame.SRCALPHA
             )
 
             ov.fill(
-                (0, 0, 0, 160)
+                (0, 0, 0, 200)
             )
 
             self.screen.blit(
@@ -539,23 +588,11 @@ class GameEngine:
                 (0, 0)
             )
 
+            # Game Over
             msg = self.big_font.render(
                 "GAME OVER",
                 True,
                 (220, 60, 60)
-            )
-
-            sc_msg = self.font.render(
-                f"Final Score: {self.score}  "
-                f"Max Combo: {self.max_combo}x",
-                True,
-                (200, 200, 200)
-            )
-
-            restart = self.font.render(
-                "Press R to Restart",
-                True,
-                (160, 160, 160)
             )
 
             self.screen.blit(
@@ -563,8 +600,107 @@ class GameEngine:
                 (
                     WIDTH // 2
                     - msg.get_width() // 2,
-                    HEIGHT // 2 - 70
+                    55
                 )
+            )
+
+            # Summary title
+            summary_title = self.font.render(
+                "GRADE SUMMARY",
+                True,
+                (255, 255, 255)
+            )
+
+            self.screen.blit(
+                summary_title,
+                (
+                    WIDTH // 2
+                    - summary_title.get_width() // 2,
+                    115
+                )
+            )
+
+            # Grade counts
+            perfect = self.font.render(
+                f"PERFECT: {self.perfect_count}",
+                True,
+                (255, 220, 0)
+            )
+
+            great = self.font.render(
+                f"GREAT: {self.great_count}",
+                True,
+                (100, 220, 100)
+            )
+
+            ok = self.font.render(
+                f"OK: {self.ok_count}",
+                True,
+                (180, 180, 255)
+            )
+
+            miss = self.font.render(
+                f"MISS: {self.miss_count}",
+                True,
+                (220, 60, 60)
+            )
+
+            accuracy_text = self.font.render(
+                f"Accuracy: {accuracy:.1f}%",
+                True,
+                (255, 255, 255)
+            )
+
+            self.screen.blit(
+                perfect,
+                (
+                    WIDTH // 2
+                    - perfect.get_width() // 2,
+                    165
+                )
+            )
+
+            self.screen.blit(
+                great,
+                (
+                    WIDTH // 2
+                    - great.get_width() // 2,
+                    205
+                )
+            )
+
+            self.screen.blit(
+                ok,
+                (
+                    WIDTH // 2
+                    - ok.get_width() // 2,
+                    245
+                )
+            )
+
+            self.screen.blit(
+                miss,
+                (
+                    WIDTH // 2
+                    - miss.get_width() // 2,
+                    285
+                )
+            )
+
+            self.screen.blit(
+                accuracy_text,
+                (
+                    WIDTH // 2
+                    - accuracy_text.get_width() // 2,
+                    345
+                )
+            )
+
+            # Final score
+            sc_msg = self.font.render(
+                f"Final Score: {self.score}",
+                True,
+                (200, 200, 200)
             )
 
             self.screen.blit(
@@ -572,8 +708,31 @@ class GameEngine:
                 (
                     WIDTH // 2
                     - sc_msg.get_width() // 2,
-                    HEIGHT // 2
+                    400
                 )
+            )
+
+            # Max combo
+            max_combo_msg = self.font.render(
+                f"Max Combo: {self.max_combo}x",
+                True,
+                (200, 200, 200)
+            )
+
+            self.screen.blit(
+                max_combo_msg,
+                (
+                    WIDTH // 2
+                    - max_combo_msg.get_width() // 2,
+                    435
+                )
+            )
+
+            # Restart
+            restart = self.font.render(
+                "Press R to Restart",
+                True,
+                (160, 160, 160)
             )
 
             self.screen.blit(
@@ -581,7 +740,7 @@ class GameEngine:
                 (
                     WIDTH // 2
                     - restart.get_width() // 2,
-                    HEIGHT // 2 + 50
+                    500
                 )
             )
 
